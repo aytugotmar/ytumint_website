@@ -1,0 +1,92 @@
+server {
+  listen 443 ssl;
+  listen [::]:443 ssl ipv6only=on;
+
+  server_name ytumint.org www.ytumint.org;
+
+  root /var/www/ytumint.org/html;
+  index index.php index.html;
+
+  ssl_certificate /etc/letsencrypt/live/ytumint.org/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/ytumint.org/privkey.pem;
+  include /etc/letsencrypt/options-ssl-nginx.conf;
+  ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+  client_max_body_size 20M;
+
+  location ^~ /config/ { deny all; }
+  location ~ /\. { deny all; }
+
+  location = /admin { return 301 /admin/; }
+
+  # Canonical: ana sayfa URL'sinde index.php görünmesin
+  location = /index.php {
+    if ($request_uri ~ ^/index\.php($|\?)) {
+      return 301 /$is_args$args;
+    }
+
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    fastcgi_param SCRIPT_NAME     $fastcgi_script_name;
+    fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+  }
+
+  # Canonical: ana sayfa URL'sinde /index de görünmesin (extensionless rewrite'lar yüzünden oluşabiliyor)
+  location = /index {
+    return 301 /$is_args$args;
+  }
+  location = /index/ {
+    return 301 /$is_args$args;
+  }
+
+  # Canonical: admin tarafında index.php görünmesin
+  location = /admin/index.php {
+    if ($request_uri ~ ^/admin/index\.php($|\?)) {
+      return 301 /admin/$is_args$args;
+    }
+
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    fastcgi_param SCRIPT_NAME     $fastcgi_script_name;
+    fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+  }
+
+  location / {
+    try_files $uri $uri/ @extless;
+  }
+
+  location @extless {
+    if (-f $document_root$uri.php) { rewrite ^ $uri.php last; }
+    rewrite ^ /index.php?$query_string last;
+  }
+
+  # ^~ YOK -> PHP regex'i devreye girsin
+  location /admin/ {
+    try_files $uri $uri/ @admin_extless;
+  }
+
+  location @admin_extless {
+    if (-f $document_root$uri.php) { rewrite ^ $uri.php last; }
+    rewrite ^ /admin/index.php?$query_string last;
+  }
+
+  location ~ \.php$ {
+    # Sadece dışarıdan gelen *.php isteklerini SEO için 301 yap (GET/HEAD)
+    set $redirect_php 0;
+    if ($request_method ~ ^(GET|HEAD)$) { set $redirect_php 1; }
+    if ($request_uri !~ \.php($|\?)) { set $redirect_php 0; }
+    if ($redirect_php = 1) { rewrite ^/(.+)\.php$ /$1 permanent; }
+
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    fastcgi_param SCRIPT_NAME     $fastcgi_script_name;
+    fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+  }
+}
+
+server {
+  listen 80;
+  listen [::]:80;
+  server_name ytumint.org www.ytumint.org;
+  return 301 https://$host$request_uri;
+}
