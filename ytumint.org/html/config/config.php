@@ -2,7 +2,7 @@
 // Veritabanı yapılandırması
 define('DB_HOST', 'localhost');
 define('DB_USER', 'ytumint_user');
-define('DB_PASS', 'deepmint.org123!');
+define('DB_PASS', 'sifre');
 define('DB_NAME', 'ytumint');
 
 // Site ayarları
